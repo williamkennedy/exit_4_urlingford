@@ -1,0 +1,16 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    dotenv (3.1.2)
+    stripe-ruby (9001.0)
+
+PLATFORMS
+  arm64-darwin-23
+  ruby
+
+DEPENDENCIES
+  dotenv (~> 3.1)
+  stripe-ruby (~> 9001.0)
+
+BUNDLED WITH
+   2.5.9
