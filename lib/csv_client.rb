@@ -3,7 +3,12 @@ require 'csv'
 class CsvClient
   # Example usage
   def initialize
-    @file_path = '../data/customer.csv'
+    @file_path = File.join('data', 'customer.csv')
+    return if File.exist?(@file_path)
+
+    CSV.open(@file_path, 'w') do |csv|
+      csv << %w[email id granted_until].concat(Array.new(20, ''))
+    end
   end
 
   # Create (Insert) a new record
@@ -15,9 +20,11 @@ class CsvClient
 
   # Read all records
   def read_records
+    records = []
     CSV.foreach(@file_path, headers: true) do |row|
-      puts row.to_h
+      records << row.to_h.transform_keys(&:to_sym)
     end
+    records
   end
 
   # Find a specific record
@@ -31,12 +38,14 @@ class CsvClient
   # Update a specific record
   def update_record(target_email, updated_record)
     table = CSV.table(@file_path)
+    headers = table.headers
     table.each do |row|
       next unless row[:email] == target_email
 
-      row[:name] = updated_record[0]
-      row[:email] = updated_record[1]
-      row[:phone] = updated_record[2]
+      updated_hash = Hash[headers.zip(updated_record)]
+      headers.each do |header|
+        row[header] = updated_hash[header] || nil
+      end
     end
     File.open(@file_path, 'w') { |f| f.write(table.to_csv) }
   end
@@ -52,7 +61,7 @@ class CsvClient
 
   # Find or create a record
   def find_or_create_record(target_email, new_record)
-    existing_record = find_record(@file_path, target_email)
+    existing_record = find_record(target_email)
     if existing_record
       existing_record
     else

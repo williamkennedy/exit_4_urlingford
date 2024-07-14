@@ -4,11 +4,12 @@ require_relative '../lib/stripe_client'
 
 class Date
   def self.yesterday
-    Date.today - 1
+    Date.today - 7
   end
 end
 
 stripe = StripeClient.new
+csv_client = CsvClient.new
 
 # get todays events based on payment_intent.succeeded
 # get customers name based on thier customer id and their email
@@ -21,19 +22,16 @@ today_end = (Date.today + 1).to_time.to_i
 yesterday_start = Date.yesterday.to_time.to_i
 yesterday_end = Date.today.to_time.to_i
 
-events = stripe.events({ type: 'payment_intent.created',
+events = stripe.events({ type: 'payment_intent.succeeded',
                          created: {
-                           gte: today_start,
+                           gte: yesterday_start,
                            lt: today_end
                          } })
 
 # Print the events
-events.each do |event|
+events.to_a.reverse.each do |event|
   customer = stripe.customer(event.data.object.customer)
   door_keeper = DoorKeeper.new(customer)
   door_keeper.triage_knock_event(event)
-
-  # this returns dates at the end
-  # So create or find a csv with that date as the name and add user to it
-  # Cronjob will then look at that csv file and grant access if not already granted
+  door_keeper.grant(csv_client.find_record(customer.email)) unless csv_client.find_record(customer.email).nil?
 end
