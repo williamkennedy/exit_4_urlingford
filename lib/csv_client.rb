@@ -2,12 +2,12 @@ require 'csv'
 
 class CsvClient
   # Example usage
-  def initialize
-    @file_path = File.join('data', 'customer.csv')
+  def initialize(name='customer.csv')
+    @file_path = File.join('data', name)
     return if File.exist?(@file_path)
 
     CSV.open(@file_path, 'w') do |csv|
-      csv << %w[email id granted_until].concat(Array.new(20, ''))
+      csv << %w[email id granted_until invite_sent].concat(Array.new(20, ''))
     end
   end
 

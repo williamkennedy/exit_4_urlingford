@@ -1,4 +1,5 @@
 require_relative 'csv_client'
+require_relative 'unifi_access_api'
 
 class DoorKeeper
   attr_accessor :event, :customer
@@ -6,6 +7,7 @@ class DoorKeeper
   def initialize(customer)
     @customer = customer
     @csv_client = CsvClient.new
+    @unfi_access_api = UnifiAccessApi.new
   end
 
   def triage_knock_event(event)
@@ -22,26 +24,74 @@ class DoorKeeper
   end
 
   def grant(record)
-    email = record[:email]
-    granted_until = record[:granted_until]
+    email = record['email']
+    granted_until = record['granted_until']
+    invite_sent = record['invite_sent']
     return if granted_until.nil?
 
     puts "granting access for #{email}" if equal_or_greater_than_today?(granted_until)
-    # TODO: grant access to unfi
+    return unless equal_or_greater_than_today? granted_until
+
+    i = 1
+    response = @unfi_access_api.get_users(i)
+    users = response['data']
+
+    while users.count < response.dig('pagination', 'total').to_i
+      i += 1
+      response = @unfi_access_api.get_users(i)
+      break if response['code'] != 'SUCCESS'
+
+      users.concat(response.dig('data'))
+    end
+
+    user = users.select { |user| user['email'] == email || user['user_email'] == email }
+    user = user.first if user.is_a? Array
+    puts user.inspect
+    user = create_user(email) if user.nil?
+    return if user.nil?
+
+    # grant_access to policy
+    @unfi_access_api.add_access(user)
+
+    
+    # invite_user if unverifed
+    invite_user_if_univited(user)
   end
 
   # revoke access
   def revoke(record)
-    return if record[:granted_until].nil?
+    email = record['email']
+    granted_until = record['granted_until']
 
-    puts 'check if should revoke'
-    return if equal_or_greater_than_today?(record[:granted_until])
+    return if equal_or_greater_than_today?(granted_until)
 
-    puts "revoking access for #{record[:email]}"
-    # TODO: revoke access to unfi
+    puts "revoking access for #{email}"
+    i = 1
+    response = @unfi_access_api.get_users(i)
+    users = response['data']
+
+    while users.count < response.dig('pagination', 'total').to_i
+      i += 1
+      response = @unfi_access_api.get_users(i)
+      break if response['code'] != 'SUCCESS'
+
+      users.concat(response.dig('data'))
+    end
+    users.flatten
+
+    user = users.select { |user| user['email'] == email || user['user_email'] == email }
+    user = user.first if user.is_a? Array
+    return if user.nil?
+     
+    @unfi_access_api.remove_access(user)
   end
 
   private
+
+  def create_user(email)
+    response = @unfi_access_api.create_user(email)
+    response.dig('data')
+  end
 
   def add_meeting_room_access
     puts 'granting meetingroom access'
@@ -67,12 +117,22 @@ class DoorKeeper
 
   # stripe id, event metadata**, booking type, grant status
   def add_customer_to_csv(event)
-    puts event.data.object.metadata
     row = [@customer.email, @customer.id,
-           extract_date(event.data.object.metadata.description)].concat(event.data.object.metadata.values)
+           extract_date(event.data.object.metadata.description), 'no'].concat(event.data.object.metadata.values)
     @csv_client.find_or_create_record(@customer.email, row)
     @csv_client.update_record(@customer.email, row)
   end
+
+  def invite_user_if_univited(user)
+
+    client = CsvClient.new('invites.csv')
+    return if client.find_record(user['user_email'])
+
+
+    @unfi_access_api.invite(user)
+    client.find_or_create_record(user['user_email'], [user['user_email']])
+  end
+
 
   def extract_date(text)
     pattern = %r{\b\d{2}/\d{2}/\d{4}\b}
@@ -85,7 +145,3 @@ class DoorKeeper
     match.to_a.last
   end
 end
-
-# todo
-# USE CSV to manage DoorKeeper
-# implemet revoke
