@@ -127,6 +127,7 @@ class DoorKeeper
 
     client = CsvClient.new('invites.csv')
     return if client.find_record(user['user_email'])
+    return unless user['email_status'] == 'UNVERIFED'
 
 
     @unfi_access_api.invite(user)
