@@ -124,7 +124,6 @@ class DoorKeeper
   end
 
   def invite_user_if_univited(user)
-
     client = CsvClient.new('invites.csv')
     return if client.find_record(user['user_email'])
     return unless user['email_status'] == 'UNVERIFED'
