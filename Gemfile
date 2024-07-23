@@ -4,6 +4,6 @@ source "https://rubygems.org"
 
 # gem "rails"
 
-gem "stripe-ruby", "~> 9001.0"
+gem 'stripe', '~> 12.3'
 
 gem "dotenv", "~> 3.1"
